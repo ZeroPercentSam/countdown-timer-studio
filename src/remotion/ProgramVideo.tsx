@@ -34,7 +34,7 @@ export const ProgramVideo: React.FC<ResolvedProgramSpec> = (spec) => {
 
       {sortedAudio.map((a) => (
         <Sequence key={a.id} from={Math.round(a.atSec * fps)}>
-          <Audio src={a.src.startsWith('http') ? a.src : `/${a.src}`} />
+          <Audio src={a.src.startsWith('data:') || a.src.startsWith('http') ? a.src : `/${a.src}`} />
         </Sequence>
       ))}
     </AbsoluteFill>

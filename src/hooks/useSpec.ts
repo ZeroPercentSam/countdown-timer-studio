@@ -33,6 +33,9 @@ const DEFAULT_SPEC: ProgramSpec = {
     fg: '#d4c7c5',
     accent: '#ff8ea0',
     ringTrack: '#3a3534',
+    ringShape: 'hex',
+    logoMode: 'heartbeat',
+    blaze: true,
   },
   timers: {},
   steps: [
