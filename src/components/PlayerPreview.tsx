@@ -1,7 +1,7 @@
 'use client';
 
-import React from 'react';
-import { Player } from '@remotion/player';
+import React, { useRef, useEffect } from 'react';
+import { Player, type PlayerRef } from '@remotion/player';
 import { ProgramVideo } from '../remotion/ProgramVideo';
 import { CountdownVideo } from '../remotion/CountdownVideo';
 import type { ResolvedProgramSpec } from '../spec/ProgramResolvedSpec';
@@ -29,8 +29,22 @@ const DEFAULT_TIMER: ResolvedTimerSpec = {
 };
 
 export const PlayerPreview: React.FC<Props> = ({ resolved, width = 400, height = 400 }) => {
+  const playerRef = useRef<PlayerRef>(null);
+  const prevResolvedRef = useRef<ResolvedProgramSpec | null>(null);
+
+  // Auto-play from the start when a new resolved spec arrives
+  useEffect(() => {
+    if (resolved && resolved !== prevResolvedRef.current && playerRef.current) {
+      prevResolvedRef.current = resolved;
+      // Small delay to let the player mount with new props
+      setTimeout(() => {
+        playerRef.current?.seekTo(0);
+        playerRef.current?.play();
+      }, 100);
+    }
+  }, [resolved]);
+
   if (!resolved) {
-    // Show a default single timer preview
     return (
       <div style={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 4px 24px rgba(0,0,0,0.3)' }}>
         <Player
@@ -44,6 +58,7 @@ export const PlayerPreview: React.FC<Props> = ({ resolved, width = 400, height =
           controls
           loop
           acknowledgeRemotionLicense
+          numberOfSharedAudioTags={8}
         />
       </div>
     );
@@ -54,6 +69,7 @@ export const PlayerPreview: React.FC<Props> = ({ resolved, width = 400, height =
   return (
     <div style={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 4px 24px rgba(0,0,0,0.3)' }}>
       <Player
+        ref={playerRef}
         component={ProgramVideo}
         inputProps={resolved}
         durationInFrames={Math.max(1, totalFrames)}
@@ -64,6 +80,7 @@ export const PlayerPreview: React.FC<Props> = ({ resolved, width = 400, height =
         controls
         loop
         acknowledgeRemotionLicense
+        numberOfSharedAudioTags={16}
       />
     </div>
   );
