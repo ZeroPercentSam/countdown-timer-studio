@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useRef, useEffect } from 'react';
-import { Player, type PlayerRef } from '@remotion/player';
+import { Player } from '@remotion/player';
 import { ProgramVideo } from '../remotion/ProgramVideo';
 import { CountdownVideo } from '../remotion/CountdownVideo';
 import type { ResolvedProgramSpec } from '../spec/ProgramResolvedSpec';
@@ -29,7 +29,8 @@ const DEFAULT_TIMER: ResolvedTimerSpec = {
 };
 
 export const PlayerPreview: React.FC<Props> = ({ resolved, width = 400, height = 400 }) => {
-  const playerRef = useRef<PlayerRef>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const playerRef = useRef<any>(null);
   const prevResolvedRef = useRef<ResolvedProgramSpec | null>(null);
 
   // Auto-play from the start when a new resolved spec arrives
