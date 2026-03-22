@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { Player } from '@remotion/player';
 import { ProgramVideo } from '../remotion/ProgramVideo';
 import { CountdownVideo } from '../remotion/CountdownVideo';
@@ -11,6 +11,13 @@ type Props = {
   resolved: ResolvedProgramSpec | null;
   width?: number;
   height?: number;
+};
+
+export type PlayerPreviewHandle = {
+  seekTo: (frame: number) => void;
+  pause: () => void;
+  play: () => void;
+  getContainerElement: () => HTMLElement | null;
 };
 
 const DEFAULT_TIMER: ResolvedTimerSpec = {
@@ -28,33 +35,68 @@ const DEFAULT_TIMER: ResolvedTimerSpec = {
   audio: [],
 };
 
-export const PlayerPreview: React.FC<Props> = ({ resolved, width = 400, height = 400 }) => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const playerRef = useRef<any>(null);
-  const prevResolvedRef = useRef<ResolvedProgramSpec | null>(null);
+export const PlayerPreview = forwardRef<PlayerPreviewHandle, Props>(
+  ({ resolved, width = 400, height = 400 }, ref) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const playerRef = useRef<any>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const prevResolvedRef = useRef<ResolvedProgramSpec | null>(null);
 
-  // Auto-play from the start when a new resolved spec arrives
-  useEffect(() => {
-    if (resolved && resolved !== prevResolvedRef.current && playerRef.current) {
-      prevResolvedRef.current = resolved;
-      // Small delay to let the player mount with new props
-      setTimeout(() => {
-        playerRef.current?.seekTo(0);
-        playerRef.current?.play();
-      }, 100);
+    useImperativeHandle(ref, () => ({
+      seekTo: (frame: number) => playerRef.current?.seekTo(frame),
+      pause: () => playerRef.current?.pause(),
+      play: () => playerRef.current?.play(),
+      getContainerElement: () => containerRef.current,
+    }));
+
+    // Auto-play from the start when a new resolved spec arrives
+    useEffect(() => {
+      if (resolved && resolved !== prevResolvedRef.current && playerRef.current) {
+        prevResolvedRef.current = resolved;
+        setTimeout(() => {
+          playerRef.current?.seekTo(0);
+          playerRef.current?.play();
+        }, 100);
+      }
+    }, [resolved]);
+
+    if (!resolved) {
+      return (
+        <div
+          ref={containerRef}
+          style={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 4px 24px rgba(0,0,0,0.3)' }}
+        >
+          <Player
+            component={CountdownVideo}
+            inputProps={DEFAULT_TIMER}
+            durationInFrames={30 * 30}
+            compositionWidth={512}
+            compositionHeight={512}
+            fps={30}
+            style={{ width, height }}
+            controls
+            loop
+            acknowledgeRemotionLicense
+          />
+        </div>
+      );
     }
-  }, [resolved]);
 
-  if (!resolved) {
+    const totalFrames = Math.round(resolved.output.totalDurationSec * resolved.output.fps);
+
     return (
-      <div style={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 4px 24px rgba(0,0,0,0.3)' }}>
+      <div
+        ref={containerRef}
+        style={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 4px 24px rgba(0,0,0,0.3)' }}
+      >
         <Player
-          component={CountdownVideo}
-          inputProps={DEFAULT_TIMER}
-          durationInFrames={30 * 30}
-          compositionWidth={512}
-          compositionHeight={512}
-          fps={30}
+          ref={playerRef}
+          component={ProgramVideo}
+          inputProps={resolved}
+          durationInFrames={Math.max(1, totalFrames)}
+          compositionWidth={resolved.output.width}
+          compositionHeight={resolved.output.height}
+          fps={resolved.output.fps}
           style={{ width, height }}
           controls
           loop
@@ -63,24 +105,6 @@ export const PlayerPreview: React.FC<Props> = ({ resolved, width = 400, height =
       </div>
     );
   }
+);
 
-  const totalFrames = Math.round(resolved.output.totalDurationSec * resolved.output.fps);
-
-  return (
-    <div style={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 4px 24px rgba(0,0,0,0.3)' }}>
-      <Player
-        ref={playerRef}
-        component={ProgramVideo}
-        inputProps={resolved}
-        durationInFrames={Math.max(1, totalFrames)}
-        compositionWidth={resolved.output.width}
-        compositionHeight={resolved.output.height}
-        fps={resolved.output.fps}
-        style={{ width, height }}
-        controls
-        loop
-        acknowledgeRemotionLicense
-      />
-    </div>
-  );
-};
+PlayerPreview.displayName = 'PlayerPreview';

@@ -1,17 +1,19 @@
 'use client';
 
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { useSpec } from '@/hooks/useSpec';
-import { PlayerPreview } from '@/components/PlayerPreview';
+import { PlayerPreview, type PlayerPreviewHandle } from '@/components/PlayerPreview';
 import { ThemeEditor } from '@/components/ThemeEditor';
 import { StepEditor } from '@/components/StepEditor';
-import { ExportButton } from '@/components/ExportButton';
 import type { ProgramStep } from '@/spec/ProgramSpec';
 import { BUILT_IN_TEMPLATES } from '@/lib/templates';
+import { exportToMp4, downloadBlob, type ExportProgress } from '@/lib/exportVideo';
 
 export default function BuilderPage() {
   const { state, dispatch, resolve } = useSpec();
-  const playerRef = useRef<HTMLDivElement>(null);
+  const previewRef = useRef<PlayerPreviewHandle>(null);
+  const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   const handleAddTimer = useCallback(() => {
     dispatch({
@@ -72,18 +74,56 @@ export default function BuilderPage() {
   }, [resolve]);
 
   const handleExport = useCallback(async () => {
-    // Resolve with TTS first
-    const resolved = await resolve(true);
-    if (!resolved) return;
+    if (exporting) return;
 
-    // For now, show instructions. In production, this would trigger Remotion Lambda.
-    alert(
-      'Video resolved successfully!\n\n' +
-      'To export as MP4, configure Remotion Lambda (AWS) or use a screen recording of the player.\n\n' +
-      'Total duration: ' + resolved.output.totalDurationSec + ' seconds\n' +
-      'Segments: ' + resolved.segments.length
-    );
-  }, [resolve]);
+    // Check WebCodecs support
+    if (typeof VideoEncoder === 'undefined') {
+      alert(
+        'Your browser does not support WebCodecs (VideoEncoder).\n\n' +
+        'Please use Chrome, Edge, or Opera to export videos.'
+      );
+      return;
+    }
+
+    setExporting(true);
+    setExportProgress({ phase: 'preparing', percent: 0, message: 'Resolving program...' });
+
+    try {
+      // Resolve with TTS first
+      const resolved = await resolve(true);
+      if (!resolved) {
+        setExporting(false);
+        setExportProgress(null);
+        return;
+      }
+
+      // Wait for the player to render with the resolved spec
+      await new Promise((r) => setTimeout(r, 500));
+
+      const container = previewRef.current?.getContainerElement();
+      if (!container || !previewRef.current) {
+        alert('Player not ready. Please try again.');
+        setExporting(false);
+        setExportProgress(null);
+        return;
+      }
+
+      const blob = await exportToMp4(
+        container,
+        previewRef.current,
+        resolved,
+        setExportProgress
+      );
+
+      downloadBlob(blob, `countdown-timer-${Date.now()}.mp4`);
+    } catch (err) {
+      console.error('Export failed:', err);
+      alert('Export failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    } finally {
+      setExporting(false);
+      setExportProgress(null);
+    }
+  }, [exporting, resolve]);
 
   // Calculate total duration from steps
   const totalDuration = state.spec.steps.reduce((sum, step) => {
@@ -279,23 +319,62 @@ export default function BuilderPage() {
           top: 0,
           height: '100vh',
         }}
-        ref={playerRef}
       >
         <PlayerPreview
+          ref={previewRef}
           resolved={state.resolved}
           width={Math.min(450, state.spec.output.width)}
           height={Math.min(450, state.spec.output.height)}
         />
 
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
-          <button onClick={handlePreview} disabled={state.resolving} style={previewBtn}>
+          <button onClick={handlePreview} disabled={state.resolving || exporting} style={previewBtn}>
             {state.resolving ? 'Resolving...' : 'Preview'}
           </button>
-          <button onClick={handlePreviewWithAudio} disabled={state.resolving} style={previewBtn}>
+          <button onClick={handlePreviewWithAudio} disabled={state.resolving || exporting} style={previewBtn}>
             {state.resolving ? 'Resolving...' : 'Preview + Audio'}
           </button>
-          <ExportButton onExport={handleExport} disabled={state.resolving} />
+          <button
+            onClick={handleExport}
+            disabled={state.resolving || exporting}
+            style={{
+              ...previewBtn,
+              background: exporting ? '#333' : '#4f46e5',
+              color: '#fff',
+              border: '1px solid #6366f1',
+            }}
+          >
+            {exporting ? 'Exporting...' : 'Export MP4'}
+          </button>
         </div>
+
+        {/* Export progress bar */}
+        {exportProgress && (
+          <div style={{ width: '100%', maxWidth: 400 }}>
+            <div
+              style={{
+                background: '#1a1a1a',
+                borderRadius: 8,
+                overflow: 'hidden',
+                height: 8,
+                marginBottom: 8,
+              }}
+            >
+              <div
+                style={{
+                  height: '100%',
+                  width: `${exportProgress.percent}%`,
+                  background: 'linear-gradient(90deg, #4f46e5, #7c3aed)',
+                  borderRadius: 8,
+                  transition: 'width 0.3s ease',
+                }}
+              />
+            </div>
+            <p style={{ color: '#999', fontSize: 12, textAlign: 'center', margin: 0 }}>
+              {exportProgress.message}
+            </p>
+          </div>
+        )}
 
         {state.error && (
           <div style={{ color: '#f87171', fontSize: 13, textAlign: 'center', maxWidth: 400 }}>
@@ -303,7 +382,7 @@ export default function BuilderPage() {
           </div>
         )}
 
-        {state.resolved && (
+        {state.resolved && !exportProgress && (
           <div style={{ color: '#666', fontSize: 12, textAlign: 'center' }}>
             {state.resolved.segments.length} segments |{' '}
             {state.resolved.output.totalDurationSec}s total |{' '}
