@@ -59,7 +59,6 @@ export const PlayerPreview: React.FC<Props> = ({ resolved, width = 400, height =
           controls
           loop
           acknowledgeRemotionLicense
-          numberOfSharedAudioTags={8}
         />
       </div>
     );
@@ -81,7 +80,6 @@ export const PlayerPreview: React.FC<Props> = ({ resolved, width = 400, height =
         controls
         loop
         acknowledgeRemotionLicense
-        numberOfSharedAudioTags={16}
       />
     </div>
   );
